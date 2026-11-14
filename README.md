@@ -7,7 +7,8 @@ top is the Quickshell dynamic island from
 [quickshell-dotfiles](https://github.com/EnvyMeAdams/quickshell-dotfiles).
 
 ```
-install.sh                sets everything up (see Install)
+setup.sh                  one-line installer: packages, binaries, dotfiles, island, cleanup
+install.sh                links the dotfiles only (setup.sh runs it)
 config.conf               entry point, sources config/ in order
 config/                   one file per topic (monitors, keybinds, autostart…)
 local.conf                this machine only, never committed (made by install.sh)
@@ -20,26 +21,47 @@ kitty/ fastfetch/ superfile/ shell/   same as in hyprland-dotfiles
 PACKAGES.md               what to emerge, binaries first
 ```
 
-## Switching the ThinkPad from Hyprland
+## Install (one line)
 
-1. Set up binaries and install the packages: [PACKAGES.md](PACKAGES.md) steps 1-3.
-2. Update the island (it has the mango fixes):
-   `cd ~/quickshell-dotfiles && git pull`
-3. Install this config:
-   ```sh
-   curl -fsSL https://raw.githubusercontent.com/EnvyMeAdams/mango-dotfiles/main/install.sh | sh
-   ```
-   It replaces `~/.bash_profile` (old one kept as `.bash_profile.old`), so tty1
-   now starts mango instead of Hyprland.
-4. Check it parses: `mango -c ~/.config/mango/config.conf -p`
-5. Log out, log in on tty1. If something's wrong, switch to tty2 and run
-   `dbus-run-session start-hyprland` to get Hyprland back while you fix it
-   (until you remove it in step 7).
-6. Login screen (if you use it), so greetd runs the login screen in mango:
-   ```sh
-   doas ~/quickshell-dotfiles/greeter/install.sh --compositor mango --enable
-   ```
-7. Once everything works: remove Hyprland ([PACKAGES.md](PACKAGES.md) step 5).
+From a terminal on the laptop, as yourself (it asks for doas when needed):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/EnvyMeAdams/mango-dotfiles/main/setup.sh | sh
+```
+
+It turns on Gentoo's binary packages, enables GURU, installs mango and every
+program the config and island use (binaries where the binhost has them), and
+installs these dotfiles plus the island. Safe to run again to update.
+
+Options go after `sh -s --`, for example `| sh -s -- --greeter --enable`:
+
+| Option | Does |
+|---|---|
+| `--greeter` | also install the island login screen, running in mango |
+| `--enable` | with `--greeter`: start the login screen at boot |
+| `--binaries` | also reinstall what's already installed from binaries where one matches (Firefox left alone) |
+| `--cleanup` | remove Hyprland: its packages, your Hyprland dotfiles, the login screen's Hyprland mode |
+| `--yes` | don't stop at each emerge to ask |
+
+Then log out and log in on tty1: mango starts there. Hyprland stays installed
+until you clean it up, so from tty2 `dbus-run-session start-hyprland` still works.
+
+## Removing Hyprland
+
+Once mango works, run this **from a terminal inside mango** (it refuses otherwise):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/EnvyMeAdams/mango-dotfiles/main/setup.sh | sh -s -- --cleanup
+```
+
+- packs `~/.config/hypr` (and Hyprland's caches) into `~/hyprland-backup-<date>.tar.gz`, then deletes them
+- removes links that pointed into `~/.config/hypr` (like the Ghostty config)
+- switches the login screen from Hyprland to mango if it was on Hyprland
+- takes every Hypr package off the world list (hyprland, hyprshot, hyprpolkitagent,
+  xdg-desktop-portal-hyprland, hyprlang, aquamarine…), then `emerge --depclean`
+  shows everything it will remove, including what only Hyprland needed. Read it before saying yes.
+
+The `hyprland-dotfiles` repo on GitHub isn't touched; the desktop still uses it.
 
 ## What maps to what
 
