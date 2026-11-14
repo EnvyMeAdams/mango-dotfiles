@@ -1,0 +1,8 @@
+#!/bin/sh
+# OpenCloud sync client (AppImage via Gear Lever). Waits a few seconds so the
+# tray is ready, clears a lock left by a crashed copy, skips if not installed.
+app="$HOME/AppImages/opencloud_desktop_desktop_sync_client.appimage"
+[ -x "$app" ] || exit 0
+sleep 5
+pgrep -f "mount_opencl" >/dev/null || rm -f "$XDG_RUNTIME_DIR"/kdsingleapp-*-opencloud*
+exec "$app"

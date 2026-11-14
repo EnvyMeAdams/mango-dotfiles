@@ -1,0 +1,260 @@
+#!/usr/bin/env python3
+"""Terminal colours from your wallpaper (kitty, Ghostty, superfile).
+
+Reads the wallpaper the island is showing (~/.config/island/settings.json;
+for a video it uses a still frame) and writes matching themes:
+  kitty      ~/.config/kitty/themes/wallpaper.conf   (kitty.conf: globinclude themes/wallpaper.conf)
+  Ghostty    ~/.config/ghostty/themes/wallpaper      (config: theme = wallpaper)
+  fastfetch  ~/.config/fastfetch/wallpaper-colors     (read by the fastfetch function in ~/.bashrc)
+  superfile  ~/.config/superfile/theme/wallpaper.toml (config.toml: theme = "wallpaper")
+
+  wallpaper-colors            once
+  wallpaper-colors --watch    again whenever the wallpaper changes
+  wallpaper-colors <image>    from any picture
+
+Open kitty windows are recoloured straight away. Ghostty: new windows get
+them, Ctrl+Shift+, reloads an open one. superfile: the next time it opens. Needs Pillow (dev-python/pillow) and, for video
+wallpapers, ffmpegthumbnailer.
+"""
+import colorsys
+import json
+import math
+import os
+import shutil
+import subprocess
+import sys
+import time
+
+HOME = os.path.expanduser("~")
+SETTINGS = os.path.join(HOME, ".config/island/settings.json")
+THUMBS = os.path.join(HOME, ".cache/island/thumbs")
+CONF = os.environ.get("XDG_CONFIG_HOME", os.path.join(HOME, ".config"))
+OUT = os.path.join(CONF, "ghostty/themes/wallpaper")
+SPF_OUT = os.path.join(CONF, "superfile/theme/wallpaper.toml")
+KITTY_OUT = os.path.join(CONF, "kitty/themes/wallpaper.conf")
+FASTFETCH_OUT = os.path.join(CONF, "fastfetch/wallpaper-colors")
+
+# ANSI slot -> hue it should sit near (red, green, yellow, blue, magenta, cyan)
+SLOTS = [("red", 0.0), ("green", 0.33), ("yellow", 0.14), ("blue", 0.6), ("magenta", 0.85), ("cyan", 0.5)]
+
+
+def wallpaper():
+    """(path, kind) of the island's desktop wallpaper, first display."""
+    try:
+        with open(SETTINGS) as f:
+            desk = json.load(f).get("desktop") or {}
+    except (OSError, ValueError):
+        return None
+    e = desk.get("*") or next((v for v in desk.values() if isinstance(v, dict)), None)
+    if not e or not e.get("path"):
+        return None
+    return os.path.expanduser(e["path"]), e.get("kind", "photo")
+
+
+def still(path, kind):
+    """An image file to read colours from."""
+    if kind != "video":
+        return path
+    frame = os.path.join(THUMBS, os.path.basename(path) + ".jpg")
+    if not os.path.isfile(frame) and shutil.which("ffmpegthumbnailer"):
+        os.makedirs(THUMBS, exist_ok=True)
+        subprocess.run(["ffmpegthumbnailer", "-i", path, "-o", frame, "-s", "480", "-q", "6"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return frame if os.path.isfile(frame) else ""
+
+
+def palette(image):
+    """The wallpaper's main colours as (h, l, s, weight), most common first."""
+    from PIL import Image
+    img = Image.open(image).convert("RGB")
+    img.thumbnail((200, 200))
+    q = img.quantize(colors=16, method=Image.Quantize.MEDIANCUT)
+    pal = q.getpalette()
+    out = []
+    for count, idx in sorted(q.getcolors(), reverse=True):
+        r, g, b = (c / 255 for c in pal[idx * 3: idx * 3 + 3])
+        h, l, s = colorsys.rgb_to_hls(r, g, b)
+        out.append((h, l, s, count))
+    return out
+
+
+def hexc(h, l, s):
+    r, g, b = colorsys.hls_to_rgb(h % 1.0, max(0, min(1, l)), max(0, min(1, s)))
+    return "#%02x%02x%02x" % (round(r * 255), round(g * 255), round(b * 255))
+
+
+def hue_gap(a, b):
+    d = abs(a - b) % 1.0
+    return min(d, 1 - d)
+
+
+def theme(cols):
+    # the wallpaper's overall tint: the hue covering the most area (gradients
+    # split into many similar colours, so group them by hue first)
+    bins = [0.0] * 12
+    for h, l, sat, n in cols:
+        if sat > 0.12 and 0.08 < l < 0.92:
+            bins[int(h * 12) % 12] += n * sat
+    # neighbouring hues count too, so a wide sky beats one flat patch
+    score = [bins[i - 1] * 0.5 + bins[i] + bins[(i + 1) % 12] * 0.5 for i in range(12)]
+    if max(score) > 0:
+        top = score.index(max(score))
+        near = {(top - 1) % 12, top, (top + 1) % 12}
+        group = [c for c in cols if int(c[0] * 12) % 12 in near and c[2] > 0.12]
+        w = sum(c[3] for c in group)
+        x = sum(math.cos(c[0] * 2 * math.pi) * c[3] for c in group)
+        y = sum(math.sin(c[0] * 2 * math.pi) * c[3] for c in group)
+        bh = (math.atan2(y, x) / (2 * math.pi)) % 1.0
+        bs = min(sum(c[2] * c[3] for c in group) / w, 0.35)
+    else:
+        bh, bs = cols[0][0], 0.0
+    vivid = [c for c in cols if c[2] > 0.2 and 0.15 < c[1] < 0.85] or cols
+
+    lines = {
+        "background": hexc(bh, 0.08, bs * 0.6),
+        # text: a soft pastel of the wallpaper's main colour
+        "foreground": hexc(bh, 0.84, 0.60),
+        "cursor-color": hexc(bh, 0.78, 0.70),
+        "selection-background": hexc(bh, 0.30, max(bs, 0.30)),
+        "selection-foreground": hexc(bh, 0.92, 0.45),
+    }
+    pal = [None] * 16
+    pal[0] = hexc(bh, 0.16, bs * 0.6)       # black
+    pal[8] = hexc(bh, 0.50, max(bs, 0.25))  # bright black (comments, hints)
+    pal[7] = hexc(bh, 0.86, 0.35)           # white: pastel-tinted
+    pal[15] = hexc(bh, 0.93, 0.40)          # bright white
+    for i, (_, target) in enumerate(SLOTS):
+        # use the wallpaper's own colour if one is close to this hue, else the standard hue
+        near = min(vivid, key=lambda c: hue_gap(c[0], target))
+        h = near[0] if hue_gap(near[0], target) < 0.08 else target
+        s = max(0.55, min(near[2], 0.80)) if hue_gap(near[0], target) < 0.08 else 0.65
+        slot = [1, 2, 3, 4, 5, 6][i]
+        # pastel: light and soft, still distinct from each other
+        pal[slot] = hexc(h, 0.76, s)             # normal
+        pal[slot + 8] = hexc(h, 0.80, min(1, s * 1.1))  # bright: a little lighter, still colourful
+    return lines, pal
+
+
+def save(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".part"
+    with open(tmp, "w") as f:
+        f.write(text)
+    os.replace(tmp, path)
+
+
+def superfile(lines, pal, name):
+    """The same colours as a superfile theme."""
+    bg, fg = lines["background"], lines["foreground"]
+    sel, accent = lines["selection-background"], lines["cursor-color"]
+    keys = [
+        ("code_syntax_highlight", "catppuccin-mocha"),
+        ("full_screen_fg", fg), ("full_screen_bg", bg),
+        ("gradient_color", [pal[12], pal[13]]), ("directory_icon_color", ""),
+        ("file_panel_fg", fg), ("file_panel_bg", bg),
+        ("file_panel_border", pal[8]), ("file_panel_border_active", accent),
+        ("file_panel_top_directory_icon", pal[2]), ("file_panel_top_path", pal[4]),
+        ("file_panel_item_selected_fg", pal[15]), ("file_panel_item_selected_bg", sel),
+        ("footer_fg", fg), ("footer_bg", bg),
+        ("footer_border", pal[8]), ("footer_border_active", pal[2]),
+        ("sidebar_fg", fg), ("sidebar_bg", bg), ("sidebar_title", pal[6]),
+        ("sidebar_border", bg), ("sidebar_border_active", pal[5]),
+        ("sidebar_item_selected_fg", pal[15]), ("sidebar_item_selected_bg", sel),
+        ("sidebar_divider", pal[8]),
+        ("modal_fg", fg), ("modal_bg", bg), ("modal_border_active", accent),
+        ("modal_cancel_fg", bg), ("modal_cancel_bg", pal[1]),
+        ("modal_confirm_fg", bg), ("modal_confirm_bg", pal[6]),
+        ("help_menu_hotkey", pal[6]), ("help_menu_title", pal[1]),
+        ("cursor", accent), ("correct", pal[2]), ("error", pal[1]),
+        ("hint", pal[6]), ("cancel", pal[9]),
+    ]
+    out = "# Generated by wallpaper-colors from %s\n" % name
+    for k, v in keys:
+        if isinstance(v, list):
+            out += '%s = [%s]\n' % (k, ", ".join('"%s"' % x for x in v))
+        else:
+            out += '%s = "%s"\n' % (k, v)
+    return out
+
+
+def kitty(lines, pal, name):
+    """The same colours as a kitty theme."""
+    out = "# Generated by wallpaper-colors from %s\n" % name
+    out += "foreground %s\nbackground %s\ncursor %s\n" % (lines["foreground"], lines["background"], lines["cursor-color"])
+    out += "selection_foreground %s\nselection_background %s\n" % (lines["selection-foreground"], lines["selection-background"])
+    out += "".join("color%d %s\n" % (i, c) for i, c in enumerate(pal))
+    return out
+
+
+def fastfetch(lines, pal, name):
+    """Accent colours for fastfetch's labels and title, as shell variables
+    holding 24-bit colour codes (fastfetch --color-keys / --color-title)."""
+    def code(hx):
+        r, g, b = (int(hx[i:i + 2], 16) for i in (1, 3, 5))
+        return "38;2;%d;%d;%d" % (r, g, b)
+    return ("# Generated by wallpaper-colors from %s\nFF_KEYS='%s'\nFF_TITLE='%s'\n"
+            % (name.replace("'", ""), code(lines["cursor-color"]), code(lines["foreground"])))
+
+
+def reload_kitty():
+    """kitty re-reads its config (and so the new colours) on SIGUSR1."""
+    if shutil.which("pkill"):
+        subprocess.run(["pkill", "-USR1", "-x", "kitty"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def write(image):
+    lines, pal = theme(palette(image))
+    name = os.path.basename(image)
+    text = "# Generated by wallpaper-colors from %s\n" % name
+    text += "".join("palette = %d=%s\n" % (i, c) for i, c in enumerate(pal))
+    text += "".join("%s = %s\n" % kv for kv in lines.items())
+    save(OUT, text)
+    save(SPF_OUT, superfile(lines, pal, name))
+    save(KITTY_OUT, kitty(lines, pal, name))
+    save(FASTFETCH_OUT, fastfetch(lines, pal, name))
+    reload_kitty()
+    return lines["background"]
+
+
+def once(quiet=False):
+    wp = wallpaper()
+    if not wp:
+        if not quiet:
+            print("No wallpaper set in the island yet.", file=sys.stderr)
+        return
+    image = still(*wp)
+    if not image:
+        print("Couldn't get a frame from %s (install ffmpegthumbnailer)." % wp[0], file=sys.stderr)
+        return
+    bg = write(image)
+    if not quiet:
+        print("Terminal colours updated from %s (background %s)." % (os.path.basename(wp[0]), bg))
+
+
+def main():
+    try:
+        import PIL  # noqa: F401
+    except ImportError:
+        sys.exit("Needs Pillow: doas emerge --ask dev-python/pillow")
+    args = sys.argv[1:]
+    if args and not args[0].startswith("-"):
+        print("Terminal colours updated (background %s)." % write(args[0]))
+        return
+    if "--watch" in args:
+        last = None
+        while True:
+            try:
+                wp = wallpaper()
+                now = (os.path.getmtime(SETTINGS), wp)
+            except OSError:
+                now = None
+            if now != last:
+                if now is not None and (last is None or now[1] != last[1]):
+                    once(quiet=last is not None)
+                last = now
+            time.sleep(10)
+    once()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,19 @@
+#!/bin/sh
+# Starts the desktop portals without systemd: screen sharing and screenshots
+# (xdg-desktop-portal-wlr), file pickers and the rest (gtk).
+# Which portal handles what: ~/.config/xdg-desktop-portal/mango-portals.conf
+# Screen-share picker: ~/.config/xdg-desktop-portal-wlr/config
+sleep 1
+for p in xdg-desktop-portal-hyprland xdg-desktop-portal-wlr xdg-desktop-portal-gtk xdg-desktop-portal-gnome; do
+	pkill -f "$p"
+done
+pkill -f "^/usr/libexec/xdg-desktop-portal$"
+logger "mango portals: stopped old portals"
+sleep 1
+/usr/libexec/xdg-desktop-portal-gtk &
+sleep 1
+/usr/libexec/xdg-desktop-portal-wlr &
+logger "mango portals: started gtk + wlr"
+sleep 2
+/usr/libexec/xdg-desktop-portal &
+logger "mango portals: started xdg-desktop-portal"

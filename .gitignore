@@ -1,0 +1,6 @@
+*.log
+*.bak
+*~
+
+# fastfetch logo pictures are personal, keep them out
+fastfetch/logos/
