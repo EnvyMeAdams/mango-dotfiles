@@ -206,10 +206,12 @@ cleanup_hyprland() {
     [ -e "$HOME/.bashrc" ] || ln -s "$MANGO/shell/bashrc" "$HOME/.bashrc"
 
     # 2. login screen: make sure greetd no longer starts Hyprland
+    # greetd's real config (/etc/greetd/config.toml) is only rewritten with
+    # --enable, so pass it whenever that file still starts Hyprland
     if grep -qs -i "hyprland" /etc/greetd/config.toml; then
         say "Switching the login screen to mango"
-        root sh "$HOME/quickshell-dotfiles/greeter/install.sh" --compositor mango ||
-            warn "Couldn't switch it; run later: doas ~/quickshell-dotfiles/greeter/install.sh --compositor mango"
+        root sh "$HOME/quickshell-dotfiles/greeter/install.sh" --compositor mango --enable ||
+            warn "Couldn't switch it; run later: doas ~/quickshell-dotfiles/greeter/install.sh --compositor mango --enable"
     fi
 
     # 3. packages: every installed Hypr* package, then whatever only they needed
@@ -227,7 +229,12 @@ cleanup_hyprland() {
         root emerge --deselect $pkgs >/dev/null
         note "Next, emerge lists everything it will remove: Hyprland plus anything only it used."
         note "Read the list before saying yes."
-        root emerge $ask --depclean
+        if ! root emerge $ask --depclean; then
+            warn "depclean stopped, so nothing was removed yet. Usually the system needs its updates first:"
+            note "  doas emerge --ask --getbinpkg --update --newuse --deep --with-bdeps=y @world"
+            note "then run this --cleanup again; it carries on from here."
+            exit 1
+        fi
     else
         note "no Hyprland packages installed"
     fi
