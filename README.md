@@ -15,6 +15,7 @@ local.conf                this machine only, never committed (made by install.sh
 portals/                  which portal does what + the screen-share picker
 scripts/
   portals                 starts the desktop portals without systemd
+  share-picker            screen-share picker: click a window or a display
   opencloud               starts the OpenCloud AppImage if it's there
   wallpaper-colors        terminal colours from the current wallpaper
 kitty/ fastfetch/ superfile/ shell/   same as in hyprland-dotfiles
@@ -85,10 +86,16 @@ gradient border (mango borders are one colour, so it's the pink end).
 
 ## Screen sharing
 
-`scripts/portals` starts xdg-desktop-portal-wlr. When an app asks to share,
-click the display you want (slurp). Firefox, OBS and Chromium apps work this
-way. Sharing a single window doesn't work in every app (mango's docs list it as
-a known issue); share the whole display if it fails.
+`scripts/portals` starts xdg-desktop-portal-wlr (0.8+). When an app (OBS,
+Firefox, Discord-likes) asks to share, `scripts/share-picker` lets you click:
+
+- **a window**: shares just that window, even if something covers it later
+- **a display**: click anywhere outside the windows to share the whole screen
+- **Escape**: cancel
+
+Only windows on the tags you're looking at can be clicked; switch to the tag
+first. The portal reads its config at start, so after changing it log out and
+in, or run `~/.config/mango/scripts/portals`.
 
 ## Terminal colours
 

@@ -1,0 +1,34 @@
+#!/bin/sh
+# Screen-share picker for xdg-desktop-portal-wlr (OBS, Firefox, Discord-likes...).
+# When an app asks to share, click what you want:
+#   a window  -> shares just that window (keeps working if you cover it)
+#   a display -> shares the whole screen (click anywhere outside the windows)
+#   Escape    -> cancel
+# Only windows on the tags you're looking at can be clicked; switch to a tag
+# first to share a window that's on it.
+#
+# Prints what the portal expects:  "Window: <id>"  or  "Monitor: <name>"
+# (id = the ext-foreign-toplevel id mango gives each window; mmsg shows it).
+
+command -v slurp >/dev/null || exit 1
+
+windows=""
+if [ -n "$MANGO_INSTANCE_SIGNATURE" ] && command -v mmsg >/dev/null && command -v python3 >/dev/null; then
+    # visible windows as slurp boxes, labelled with what to print if picked
+    windows=$(mmsg get all-clients 2>/dev/null | python3 -c '
+import json, sys
+for c in json.load(sys.stdin).get("clients", []):
+    tid = c.get("foreign_toplevel_id") or ""
+    if tid and c.get("is_visible") and not c.get("is_minimized") and c.get("width", 0) > 0:
+        print("%d,%d %dx%d Window: %s" % (c["x"], c["y"], c["width"], c["height"], tid))')
+fi
+
+# -o: whole displays can be picked too; -r: only windows/displays, no free boxes
+pick=$(printf '%s\n' "$windows" | slurp -o -r -f '%l|%o') || exit 1
+label=${pick%%|*}
+output=${pick#*|}
+
+case "$label" in
+    "Window: "*) echo "$label" ;;
+    *) [ -n "$output" ] && echo "Monitor: $output" ;;
+esac

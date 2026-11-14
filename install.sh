@@ -63,9 +63,18 @@ link kitty/kitty.conf          "$CONF/kitty/kitty.conf"
 link fastfetch/config.jsonc    "$CONF/fastfetch/config.jsonc"
 link superfile/hotkeys.toml    "$CONF/superfile/hotkeys.toml"
 link portals/mango-portals.conf "$CONF/xdg-desktop-portal/mango-portals.conf"
-link portals/xdpw.conf         "$CONF/xdg-desktop-portal-wlr/config"
 link shell/bashrc              "$HOME/.bashrc"
 link shell/bash_profile        "$HOME/.bash_profile"
+# screen-share picker config: the portal doesn't expand ~, so write it with the real path
+xdpw="$CONF/xdg-desktop-portal-wlr/config"
+mkdir -p "$(dirname "$xdpw")"
+[ -L "$xdpw" ] && rm -f "$xdpw"
+if [ -f "$xdpw" ] && ! grep -q 'share-picker' "$xdpw"; then
+	mv "$xdpw" "$xdpw.old"
+	note "kept your old ${xdpw#"$HOME"/} as ${xdpw#"$HOME"/}.old"
+fi
+sed "s|@HOME@|$HOME|" "$MANGO/portals/xdpw.conf" > "$xdpw"
+note "wrote ${xdpw#"$HOME"/} (click a window or a display to share)"
 mkdir -p "$CONF/fastfetch/logos" "$HOME/Pictures/Screenshots" "$HOME/Videos/Recordings"
 chmod +x "$MANGO/scripts/"* 2>/dev/null || true
 [ -f "$MANGO/local.conf" ] || printf '# This machine only (not in the repo). Loaded last.\n' > "$MANGO/local.conf"
