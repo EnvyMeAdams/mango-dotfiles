@@ -227,6 +227,12 @@ cleanup_hyprland() {
         note "found:$pkgs"
         # shellcheck disable=SC2086
         root emerge --deselect $pkgs >/dev/null
+        # your own sets (/etc/portage/sets/*) would pull them straight back in
+        for f in /etc/portage/sets/*; do
+            if [ ! -f "$f" ] || ! grep -qiE '^[^#]*/(hypr|aquamarine|xdg-desktop-portal-hyprland)' "$f"; then continue; fi
+            doas sed -i.bak -E '/^[^#]*\/(hypr|aquamarine|xdg-desktop-portal-hyprland)/d' "$f"
+            note "removed the Hyprland lines from set @$(basename "$f") (old copy: $f.bak)"
+        done
         note "Next, emerge lists everything it will remove: Hyprland plus anything only it used."
         note "Read the list before saying yes."
         if ! root emerge $ask --depclean; then
