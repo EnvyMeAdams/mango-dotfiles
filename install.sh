@@ -123,7 +123,7 @@ need quickshell gui-apps/quickshell
 need kitty x11-terms/kitty
 need spf app-misc/superfile
 need fastfetch app-misc/fastfetch
-need firefox www-client/firefox
+command -v firefox >/dev/null || command -v firefox-bin >/dev/null || missing="$missing www-client/firefox"
 need wpctl media-video/wireplumber
 need playerctl media-sound/playerctl
 need brightnessctl app-misc/brightnessctl

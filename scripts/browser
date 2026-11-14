@@ -1,0 +1,9 @@
+#!/bin/sh
+# Opens Firefox, whichever kind is installed: the compiled one is called
+# "firefox", the binary package (www-client/firefox-bin) "firefox-bin".
+# Anything you pass along (a link, --private-window...) goes to Firefox.
+for b in firefox firefox-bin; do
+    command -v "$b" >/dev/null 2>&1 && exec "$b" "$@"
+done
+command -v notify-send >/dev/null && notify-send "Browser" "Firefox isn't installed (www-client/firefox or firefox-bin)."
+exit 1
