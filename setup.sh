@@ -138,7 +138,7 @@ main() {
         media-video/pipewire media-video/wireplumber media-sound/playerctl app-misc/brightnessctl \
         media-video/ffmpegthumbnailer media-sound/cava dev-python/pillow \
         net-misc/networkmanager x11-terms/kitty app-misc/fastfetch sys-apps/fd \
-        xfce-base/thunar gnome-base/gvfs media-gfx/tumbler \
+        xfce-base/thunar gnome-base/gvfs xfce-base/tumbler \
         dev-vcs/git net-misc/curl
 
     if [ "$binaries" -eq 1 ]; then

@@ -82,7 +82,7 @@ doas emerge --ask --getbinpkg \
   media-video/pipewire media-video/wireplumber media-sound/playerctl app-misc/brightnessctl \
   media-video/ffmpegthumbnailer media-sound/cava dev-python/pillow \
   x11-terms/kitty app-misc/fastfetch sys-apps/fd \
-  xfce-base/thunar gnome-base/gvfs media-gfx/tumbler
+  xfce-base/thunar gnome-base/gvfs xfce-base/tumbler
 ```
 
 What that does:
