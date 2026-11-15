@@ -18,7 +18,8 @@ scripts/
   share-picker            screen-share picker: click a window or a display
   opencloud               starts the OpenCloud AppImage if it's there
   wallpaper-colors        terminal colours from the current wallpaper
-kitty/ fastfetch/ superfile/ shell/   same as in hyprland-dotfiles
+kitty/ fastfetch/ shell/   same as in hyprland-dotfiles
+gtk/thunar-glass.css      liquid glass look for Thunar (SUPER+E), Thunar only
 PACKAGES.md               what to emerge, binaries first
 ```
 
@@ -100,5 +101,5 @@ in, or run `~/.config/mango/scripts/portals`.
 ## Terminal colours
 
 Same as in hyprland-dotfiles: `scripts/wallpaper-colors --watch` runs at login
-and themes kitty, superfile and fastfetch from the island's wallpaper.
+and themes kitty and fastfetch from the island's wallpaper.
 Needs `dev-python/pillow`, and `ffmpegthumbnailer` for video wallpapers.

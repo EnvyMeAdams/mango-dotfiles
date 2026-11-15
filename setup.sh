@@ -5,7 +5,7 @@
 #
 # Does everything in PACKAGES.md and README.md:
 #   1. turns on Gentoo's official binary packages (binhost)
-#   2. enables GURU and keywords mango, scenefx, quickshell, superfile
+#   2. enables GURU and keywords mango, scenefx, quickshell
 #   3. installs every program the config and the island use
 #   4. installs these dotfiles to ~/.config/mango and the island
 #
@@ -111,7 +111,7 @@ main() {
     esac
 
     # ── 2. GURU + keywords + USE ──
-    say "GURU (mango, quickshell and superfile live there)"
+    say "GURU (mango and quickshell live there)"
     # shellcheck disable=SC2015
     have eselect && eselect repository list >/dev/null 2>&1 || emerge_ --noreplace app-eselect/eselect-repository
     if eselect repository list -i 2>/dev/null | grep -qw guru; then
@@ -121,7 +121,7 @@ main() {
     fi
     root emaint sync -r guru >/dev/null && note "guru synced"
     portage_add package.accept_keywords \
-        "gui-wm/mangowm ~amd64" "gui-libs/scenefx ~amd64" "gui-apps/quickshell ~amd64" "app-misc/superfile ~amd64"
+        "gui-wm/mangowm ~amd64" "gui-libs/scenefx ~amd64" "gui-apps/quickshell ~amd64"
     # X: XWayland for X11/Electron apps. quickshell -hyprland: mango never uses it
     portage_add package.use "gui-wm/mangowm X" "gui-apps/quickshell -hyprland"
 
@@ -137,7 +137,8 @@ main() {
         gnome-extra/polkit-gnome gnome-base/gnome-keyring \
         media-video/pipewire media-video/wireplumber media-sound/playerctl app-misc/brightnessctl \
         media-video/ffmpegthumbnailer media-sound/cava dev-python/pillow \
-        net-misc/networkmanager x11-terms/kitty app-misc/fastfetch app-misc/superfile sys-apps/fd \
+        net-misc/networkmanager x11-terms/kitty app-misc/fastfetch sys-apps/fd \
+        xfce-base/thunar gnome-base/gvfs media-gfx/tumbler \
         dev-vcs/git net-misc/curl
 
     if [ "$binaries" -eq 1 ]; then

@@ -61,7 +61,7 @@ link() {
 say "Linking config files"
 link kitty/kitty.conf          "$CONF/kitty/kitty.conf"
 link fastfetch/config.jsonc    "$CONF/fastfetch/config.jsonc"
-link superfile/hotkeys.toml    "$CONF/superfile/hotkeys.toml"
+link gtk/thunar-glass.css      "$CONF/gtk-3.0/thunar-glass.css"
 link portals/mango-portals.conf "$CONF/xdg-desktop-portal/mango-portals.conf"
 link shell/bashrc              "$HOME/.bashrc"
 link shell/bash_profile        "$HOME/.bash_profile"
@@ -79,13 +79,16 @@ mkdir -p "$CONF/fastfetch/logos" "$HOME/Pictures/Screenshots" "$HOME/Videos/Reco
 chmod +x "$MANGO/scripts/"* 2>/dev/null || true
 [ -f "$MANGO/local.conf" ] || printf '# This machine only (not in the repo). Loaded last.\n' > "$MANGO/local.conf"
 
-# ── 3. superfile: wallpaper theme + see-through background ──
-spf="$CONF/superfile/config.toml"
-if [ -f "$spf" ]; then
-	sed -i 's/^theme = .*/theme = "wallpaper"/; s/^transparent_background = .*/transparent_background = true/' "$spf"
-	note "superfile set to the wallpaper theme"
-elif command -v spf >/dev/null; then
-	note "Open spf once (it makes its config), then run this again to theme it"
+# ── 3. Thunar: liquid glass (gtk/thunar-glass.css, Thunar only) ──
+gtkcss="$CONF/gtk-3.0/gtk.css"
+if ! grep -qs 'thunar-glass.css' "$gtkcss"; then
+	{ printf '@import url("thunar-glass.css");\n'; cat "$gtkcss" 2>/dev/null || true; } > "$gtkcss.new"
+	mv "$gtkcss.new" "$gtkcss"
+	note "Thunar glass theme added to ${gtkcss#"$HOME"/}"
+fi
+# folders open in Thunar ("show in folder", downloads, the island)
+if command -v xdg-mime >/dev/null && command -v thunar >/dev/null; then
+	xdg-mime default thunar.desktop inode/directory && note "Thunar is the default for folders"
 fi
 
 # ── 4. the Quickshell island ──
@@ -121,7 +124,7 @@ need() {   # need <command> <package>
 need mango gui-wm/mangowm
 need quickshell gui-apps/quickshell
 need kitty x11-terms/kitty
-need spf app-misc/superfile
+need thunar xfce-base/thunar
 need fastfetch app-misc/fastfetch
 command -v firefox >/dev/null || command -v firefox-bin >/dev/null || missing="$missing www-client/firefox"
 need wpctl media-video/wireplumber
@@ -143,7 +146,7 @@ python3 -c "import PIL" 2>/dev/null || missing="$missing dev-python/pillow"
 if [ -n "$missing" ]; then
 	note "Not installed:$missing"
 	note "Install with: doas emerge --ask --getbinpkg$missing"
-	note "(mangowm, quickshell and superfile need the guru repo + ~amd64; see PACKAGES.md)"
+	note "(mangowm and quickshell need the guru repo + ~amd64; see PACKAGES.md)"
 else
 	note "Everything's installed"
 fi

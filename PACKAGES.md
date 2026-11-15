@@ -45,7 +45,7 @@ versus `[binary` in:
 doas emerge -pv --getbinpkg <packages>
 ```
 
-## 2. GURU (for mango, quickshell, superfile)
+## 2. GURU (for mango, quickshell)
 
 ```sh
 doas emerge --ask --getbinpkg app-eselect/eselect-repository
@@ -59,7 +59,6 @@ doas emerge --sync guru
 gui-wm/mangowm ~amd64
 gui-libs/scenefx ~amd64
 gui-apps/quickshell ~amd64
-app-misc/superfile ~amd64
 ```
 
 `/etc/portage/package.use/mango` (mango builds without XWayland unless you ask;
@@ -82,7 +81,8 @@ doas emerge --ask --getbinpkg \
   gnome-extra/polkit-gnome gnome-base/gnome-keyring \
   media-video/pipewire media-video/wireplumber media-sound/playerctl app-misc/brightnessctl \
   media-video/ffmpegthumbnailer media-sound/cava dev-python/pillow \
-  x11-terms/kitty app-misc/fastfetch app-misc/superfile sys-apps/fd
+  x11-terms/kitty app-misc/fastfetch sys-apps/fd \
+  xfce-base/thunar gnome-base/gvfs media-gfx/tumbler
 ```
 
 What that does:
@@ -90,10 +90,10 @@ What that does:
 | Comes as a binary | Compiles (not on the binhost) |
 |---|---|
 | wlroots 0.20 (mango's base), Qt 6 (qtbase, qtdeclarative, qtmultimedia, qtsvg…), PipeWire, WirePlumber, ffmpeg, mpv | **mangowm**, **scenefx** (GURU) |
-| xdg-desktop-portal, xdg-desktop-portal-gtk | **quickshell**, **superfile** (GURU) |
+| xdg-desktop-portal, xdg-desktop-portal-gtk | **quickshell** (GURU) |
 | polkit-gnome (replaces hyprpolkitagent) | dev-qt/qtwayland (quickshell needs it) |
 | gnome-keyring, wl-clipboard | grim, slurp, wf-recorder, wlsunset, wlr-randr |
-| GTK, libadwaita, dbus, ripgrep | xdg-desktop-portal-wlr |
+| GTK, libadwaita, dbus, ripgrep, Thunar, gvfs, tumbler | xdg-desktop-portal-wlr |
 | | kitty, fastfetch, playerctl, brightnessctl, cava, ffmpegthumbnailer, fd |
 
 The compile column is all small programs except qtwayland and quickshell.
