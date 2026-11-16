@@ -220,4 +220,8 @@ say "Done. Next:"
 note "Put fastfetch pictures in ~/.config/fastfetch/logos/"
 note "Screens + workspace keys: machines/$machine.conf (wlr-randr lists the screens)"
 [ "$island" = 1 ] && note "Login screen (optional): doas ~/quickshell-dotfiles/greeter/install.sh --compositor mango --enable"
-note "Log out and back in (or reboot) to start mango"
+if ls -d /var/db/pkg/gui-wm/hyprland-[0-9]* >/dev/null 2>&1; then
+	note "Log out and pick mango at the login screen (Hyprland stays in its list)"
+else
+	note "Log out and back in (or reboot) to start mango"
+fi
