@@ -51,19 +51,26 @@ else
 fi
 
 # ── 2. links ──
+# A file or folder owned by root (made by a command run with doas) can't be
+# replaced: say so with the fix, skip it and carry on with the rest.
+owned=""
+blocked() {   # blocked <path>: note it for the end
+	note "can't replace ${1#"$HOME"/} (owned by root?); skipped it"
+	case " $owned " in *" $1 "*) ;; *) owned="$owned $1" ;; esac
+}
 # link <file in repo> <where it goes>
 link() {
 	src="$MANGO/$1" dst="$2"
-	mkdir -p "$(dirname "$dst")"
+	mkdir -p "$(dirname "$dst")" 2>/dev/null || { blocked "$(dirname "$dst")"; return 0; }
 	if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then
 		note "ok   ${dst#"$HOME"/}"
-		return
+		return 0
 	fi
 	if [ -e "$dst" ] || [ -L "$dst" ]; then
-		mv "$dst" "$dst.old"
+		mv "$dst" "$dst.old" 2>/dev/null || { blocked "$dst"; return 0; }
 		note "kept your old ${dst#"$HOME"/} as ${dst#"$HOME"/}.old"
 	fi
-	ln -s "$src" "$dst"
+	ln -s "$src" "$dst" 2>/dev/null || { blocked "$(dirname "$dst")"; return 0; }
 	note "link ${dst#"$HOME"/}"
 }
 say "Linking config files"
@@ -106,14 +113,17 @@ ln -sfn "machines/$machine.conf" "$MANGO/machine.conf"
 note "machine: $machine (screens + workspace keys from machines/$machine.conf)"
 # screen-share picker config: the portal doesn't expand ~, so write it with the real path
 xdpw="$CONF/xdg-desktop-portal-wlr/config"
-mkdir -p "$(dirname "$xdpw")"
-[ -L "$xdpw" ] && rm -f "$xdpw"
-if [ -f "$xdpw" ] && ! grep -q 'share-picker' "$xdpw"; then
-	mv "$xdpw" "$xdpw.old"
-	note "kept your old ${xdpw#"$HOME"/} as ${xdpw#"$HOME"/}.old"
+if mkdir -p "$(dirname "$xdpw")" 2>/dev/null && [ -w "$(dirname "$xdpw")" ] && { [ ! -e "$xdpw" ] || [ -w "$xdpw" ]; }; then
+	[ -L "$xdpw" ] && rm -f "$xdpw"
+	if [ -f "$xdpw" ] && ! grep -q 'share-picker' "$xdpw"; then
+		mv "$xdpw" "$xdpw.old"
+		note "kept your old ${xdpw#"$HOME"/} as ${xdpw#"$HOME"/}.old"
+	fi
+	sed "s|@HOME@|$HOME|" "$MANGO/portals/xdpw.conf" > "$xdpw"
+	note "wrote ${xdpw#"$HOME"/} (click a window or a display to share)"
+else
+	blocked "$(dirname "$xdpw")"
 fi
-sed "s|@HOME@|$HOME|" "$MANGO/portals/xdpw.conf" > "$xdpw"
-note "wrote ${xdpw#"$HOME"/} (click a window or a display to share)"
 mkdir -p "$CONF/fastfetch/logos" "$HOME/Pictures/Screenshots" "$HOME/Videos/Recordings"
 chmod +x "$MANGO/scripts/"* 2>/dev/null || true
 [ -f "$MANGO/local.conf" ] || printf '# This machine only (not in the repo). Loaded last.\n' > "$MANGO/local.conf"
@@ -121,9 +131,13 @@ chmod +x "$MANGO/scripts/"* 2>/dev/null || true
 # ── 3. Thunar: liquid glass (gtk/thunar-glass.css, Thunar only) ──
 gtkcss="$CONF/gtk-3.0/gtk.css"
 if ! grep -qs 'thunar-glass.css' "$gtkcss"; then
-	{ printf '@import url("thunar-glass.css");\n'; cat "$gtkcss" 2>/dev/null || true; } > "$gtkcss.new"
-	mv "$gtkcss.new" "$gtkcss"
-	note "Thunar glass theme added to ${gtkcss#"$HOME"/}"
+	if { printf '@import url("thunar-glass.css");\n'; cat "$gtkcss" 2>/dev/null || true; } > "$gtkcss.new" 2>/dev/null &&
+	   mv "$gtkcss.new" "$gtkcss" 2>/dev/null; then
+		note "Thunar glass theme added to ${gtkcss#"$HOME"/}"
+	else
+		rm -f "$gtkcss.new" 2>/dev/null || true
+		blocked "$gtkcss"
+	fi
 fi
 # folders open in Thunar ("show in folder", downloads, the island)
 if command -v xdg-mime >/dev/null && command -v thunar >/dev/null; then
@@ -191,6 +205,17 @@ else
 fi
 
 echo
+# anything root-owned that got skipped, with the one command that fixes it
+if [ -n "$owned" ]; then
+	echo
+	say "Some files belong to root, so they were skipped:"
+	for p in $owned; do note "${p#"$HOME"/}"; done
+	note "Give them back to yourself, then run this again:"
+	# shellcheck disable=SC2086
+	note "  doas chown -R $(id -un): $owned"
+	note "  sh $MANGO/install.sh --no-island"
+fi
+
 say "Done. Next:"
 note "Put fastfetch pictures in ~/.config/fastfetch/logos/"
 note "Screens + workspace keys: machines/$machine.conf (wlr-randr lists the screens)"
