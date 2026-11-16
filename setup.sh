@@ -290,7 +290,7 @@ cleanup_hyprland() {
 
     echo
     say "Hyprland is gone from this machine."
-    note "Your hyprland-dotfiles repo on GitHub wasn't touched (the desktop still uses it)."
+    note "Your hyprland-dotfiles repo on GitHub wasn't touched, so you can always go back."
 }
 
 main "$@"
