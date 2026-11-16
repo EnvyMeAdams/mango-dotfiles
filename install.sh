@@ -4,7 +4,11 @@
 #   From GitHub:  curl -fsSL https://raw.githubusercontent.com/EnvyMeAdams/mango-dotfiles/main/install.sh | sh
 #   From a clone: ~/.config/mango/install.sh
 #
-#   --no-island   skip the Quickshell island (quickshell-dotfiles)
+#   --no-island        skip the Quickshell island (quickshell-dotfiles)
+#   --machine NAME     screens + workspace keys from machines/NAME.conf
+#                      (t440p, desktop, generic). Without it: kept as it is,
+#                      or picked from the hardware (ThinkPad / the desktop's
+#                      ASRock B850M board / anything else = generic)
 #
 # Safe to run again: anything it would replace is moved to <name>.old first,
 # and links that are already right are left alone. Installs no packages;
@@ -16,11 +20,15 @@ ISLAND_REPO=https://github.com/EnvyMeAdams/quickshell-dotfiles
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}"
 MANGO="$CONF/mango"
 island=1
-for a in "$@"; do
-	case "$a" in
+machine=""
+while [ $# -gt 0 ]; do
+	case "$1" in
 	--no-island) island=0 ;;
-	*) echo "Unknown option: $a" >&2; exit 2 ;;
+	--machine) shift; machine="${1:-}" ;;
+	--machine=*) machine="${1#--machine=}" ;;
+	*) echo "Unknown option: $1" >&2; exit 2 ;;
 	esac
+	shift
 done
 
 say()  { printf '\033[1m==>\033[0m %s\n' "$*"; }
@@ -64,7 +72,38 @@ link fastfetch/config.jsonc    "$CONF/fastfetch/config.jsonc"
 link gtk/thunar-glass.css      "$CONF/gtk-3.0/thunar-glass.css"
 link portals/mango-portals.conf "$CONF/xdg-desktop-portal/mango-portals.conf"
 link shell/bashrc              "$HOME/.bashrc"
-link shell/bash_profile        "$HOME/.bash_profile"
+# ~/.bash_profile starts the session on tty1. While Hyprland is still on this
+# machine and your profile starts it, leave it: tty1 stays the Hyprland fallback
+# (the login screen offers both). setup.sh --cleanup switches it to mango.
+if ls -d /var/db/pkg/gui-wm/hyprland-[0-9]* >/dev/null 2>&1 && grep -qs "start-hyprland\|Hyprland" "$HOME/.bash_profile"; then
+	note "kept ~/.bash_profile (tty1 still starts Hyprland; mango is in the login screen's list)"
+else
+	link shell/bash_profile    "$HOME/.bash_profile"
+fi
+
+# ── this machine: screens + workspace keys (machine.conf -> machines/NAME.conf) ──
+if [ -z "$machine" ]; then
+	cur=$(readlink "$MANGO/machine.conf" 2>/dev/null || true)
+	if [ -n "$cur" ] && [ -f "$MANGO/$cur" ]; then
+		machine=$(basename "$cur" .conf)
+	elif grep -qs "ThinkPad" /sys/class/dmi/id/product_name /sys/class/dmi/id/product_version /sys/class/dmi/id/product_family; then
+		machine=t440p
+	elif grep -qs "B850M Pro-A" /sys/class/dmi/id/board_name; then
+		machine=desktop
+	else
+		machine=generic
+	fi
+fi
+if [ ! -f "$MANGO/machines/$machine.conf" ]; then
+	note "no machines/$machine.conf; using machines/generic.conf"
+	machine=generic
+fi
+if [ -e "$MANGO/machine.conf" ] && [ ! -L "$MANGO/machine.conf" ]; then
+	mv "$MANGO/machine.conf" "$MANGO/machine.conf.old"
+	note "kept your old machine.conf as machine.conf.old"
+fi
+ln -sfn "machines/$machine.conf" "$MANGO/machine.conf"
+note "machine: $machine (screens + workspace keys from machines/$machine.conf)"
 # screen-share picker config: the portal doesn't expand ~, so write it with the real path
 xdpw="$CONF/xdg-desktop-portal-wlr/config"
 mkdir -p "$(dirname "$xdpw")"
@@ -154,6 +193,6 @@ fi
 echo
 say "Done. Next:"
 note "Put fastfetch pictures in ~/.config/fastfetch/logos/"
-note "Check config/monitors.conf matches this machine's screens (wlr-randr lists them)"
+note "Screens + workspace keys: machines/$machine.conf (wlr-randr lists the screens)"
 [ "$island" = 1 ] && note "Login screen (optional): doas ~/quickshell-dotfiles/greeter/install.sh --compositor mango --enable"
 note "Log out and back in (or reboot) to start mango"

@@ -14,8 +14,15 @@
 #   --enable       with --greeter: start the login screen at boot
 #   --binaries     also reinstall everything already on the system from
 #                  binaries where one matches (Firefox left alone)
+#   --machine NAME screens + workspace keys: t440p, desktop or generic
+#                  (picked from the hardware when left out)
+#   --no-binhost   don't turn on Gentoo's binary packages (compile everything)
 #   --cleanup      after mango works: remove Hyprland, its packages and your
 #                  Hyprland dotfiles from this machine (run it from mango)
+#
+# Hyprland can stay installed next to mango for as long as you like: until
+# --cleanup, Quickshell keeps its Hyprland support and tty1 keeps starting
+# Hyprland; pick mango or Hyprland at the login screen.
 #   --yes          don't ask before each emerge (still asks for doas)
 #
 # Safe to run again: done steps are skipped, packages already installed
@@ -30,7 +37,7 @@ main() {
     CONF="${XDG_CONFIG_HOME:-$HOME/.config}"
     MANGO="$CONF/mango"
     BINHOST=https://distfiles.gentoo.org/releases/amd64/binpackages/23.0/x86-64/
-    greeter=0; enable=0; binaries=0; cleanup=0; ask=--ask
+    greeter=0; enable=0; binaries=0; cleanup=0; binhost=1; machine=""; ask=--ask
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -38,8 +45,11 @@ main() {
             --enable) enable=1 ;;
             --binaries) binaries=1 ;;
             --cleanup) cleanup=1 ;;
+            --no-binhost) binhost=0 ;;
+            --machine) shift; machine="${1:-}" ;;
+            --machine=*) machine="${1#--machine=}" ;;
             --yes) ask="" ;;
-            -h|--help) sed -n '2,24p' "$0" 2>/dev/null || echo "Options: --greeter --enable --binaries --cleanup --yes"; return 0 ;;
+            -h|--help) sed -n '2,32p' "$0" 2>/dev/null || echo "Options: --greeter --enable --binaries --machine NAME --no-binhost --cleanup --yes"; return 0 ;;
             *) echo "Unknown option: $1" >&2; return 1 ;;
         esac
         shift
@@ -60,7 +70,10 @@ main() {
     root() { doas "$@" < /dev/tty; }
     # root_write <file>: write stdin to a root-owned file
     root_write() { doas sh -c 'mkdir -p "$(dirname "$1")" && cat > "$1"' sh "$1"; }
-    emerge_() { root emerge $ask --getbinpkg "$@"; }
+    if [ "$binhost" -eq 1 ]; then getbin=--getbinpkg; else getbin=""; fi
+    # shellcheck disable=SC2086
+    emerge_() { root emerge $ask $getbin "$@"; }
+    hyprland_here() { ls -d /var/db/pkg/gui-wm/hyprland-[0-9]* >/dev/null 2>&1; }
 
     # portage_add <package.use|package.accept_keywords> <lines...>
     # /etc/portage/<kind> can be a folder or a single file; handle both
@@ -83,26 +96,30 @@ main() {
     fi
 
     # ── 1. binary packages ──
-    say "Binary packages (Gentoo binhost)"
-    if [ -d /etc/portage/binrepos.conf ] && grep -rqs "binpackages" /etc/portage/binrepos.conf; then
-        note "binhost already set up"
-    elif [ -f /etc/portage/binrepos.conf ] && grep -qs "binpackages" /etc/portage/binrepos.conf; then
-        note "binhost already set up"
+    if [ "$binhost" -eq 0 ]; then
+        say "Binary packages: skipped (--no-binhost), everything compiles"
     else
-        printf '[gentoobinhost]\npriority = 9999\nsync-uri = %s\n' "$BINHOST" |
-            root_write /etc/portage/binrepos.conf/gentoobinhost.conf
-        note "added $BINHOST"
+        say "Binary packages (Gentoo binhost)"
+        if [ -d /etc/portage/binrepos.conf ] && grep -rqs "binpackages" /etc/portage/binrepos.conf; then
+            note "binhost already set up"
+        elif [ -f /etc/portage/binrepos.conf ] && grep -qs "binpackages" /etc/portage/binrepos.conf; then
+            note "binhost already set up"
+        else
+            printf '[gentoobinhost]\npriority = 9999\nsync-uri = %s\n' "$BINHOST" |
+                root_write /etc/portage/binrepos.conf/gentoobinhost.conf
+            note "added $BINHOST"
+        fi
+        if grep -qs '^[^#]*FEATURES=.*getbinpkg' /etc/portage/make.conf; then
+            note "make.conf already has getbinpkg"
+        else
+            # shellcheck disable=SC2016
+            printf '\n# added by mango-dotfiles setup.sh: use binary packages when they match\nFEATURES="${FEATURES} getbinpkg binpkg-request-signature"\n' |
+                doas sh -c 'cat >> /etc/portage/make.conf'
+            note "make.conf: FEATURES += getbinpkg binpkg-request-signature"
+        fi
+        # shellcheck disable=SC2015
+        if have getuto; then root getuto >/dev/null 2>&1 && note "binhost signing keys ready" || warn "getuto failed; signed binaries may be refused"; fi
     fi
-    if grep -qs '^[^#]*FEATURES=.*getbinpkg' /etc/portage/make.conf; then
-        note "make.conf already has getbinpkg"
-    else
-        # shellcheck disable=SC2016
-        printf '\n# added by mango-dotfiles setup.sh: use binary packages when they match\nFEATURES="${FEATURES} getbinpkg binpkg-request-signature"\n' |
-            doas sh -c 'cat >> /etc/portage/make.conf'
-        note "make.conf: FEATURES += getbinpkg binpkg-request-signature"
-    fi
-    # shellcheck disable=SC2015
-    if have getuto; then root getuto >/dev/null 2>&1 && note "binhost signing keys ready" || warn "getuto failed; signed binaries may be refused"; fi
     case "$(readlink /etc/portage/make.profile 2>/dev/null)" in
         *systemd*) warn "Your profile is a systemd one; the binaries are built for both, but this setup expects OpenRC." ;;
         */desktop*) ;;
@@ -122,13 +139,20 @@ main() {
     root emaint sync -r guru >/dev/null && note "guru synced"
     portage_add package.accept_keywords \
         "gui-wm/mangowm ~amd64" "gui-libs/scenefx ~amd64" "gui-apps/quickshell ~amd64"
-    # X: XWayland for X11/Electron apps. quickshell -hyprland: mango never uses it
-    portage_add package.use "gui-wm/mangowm X" "gui-apps/quickshell -hyprland"
+    # X: XWayland for X11/Electron apps
+    portage_add package.use "gui-wm/mangowm X"
+    # quickshell -hyprland: mango never uses it. But while Hyprland is still here
+    # the island needs it there, so it's only dropped by --cleanup.
+    if hyprland_here; then
+        note "Hyprland is installed: Quickshell keeps its Hyprland support for now"
+    else
+        portage_add package.use "gui-apps/quickshell -hyprland"
+    fi
 
     # ── 3. programs ──
     say "Installing programs (binaries where the binhost has them)"
     note "Lines marked [binary] download, [ebuild] compile."
-    # --newuse: rebuilds quickshell if it was built with Hyprland support
+    # --newuse: rebuilds quickshell when its USE changed (e.g. -hyprland above)
     emerge_ --noreplace --newuse \
         gui-wm/mangowm gui-apps/quickshell \
         gui-apps/grim gui-apps/slurp gui-apps/wl-clipboard gui-apps/wf-recorder \
@@ -156,7 +180,9 @@ main() {
         git clone --quiet "$REPO" "$MANGO"
     fi
     # links, local.conf, wallpaper colours, config check (no island: done next)
-    sh "$MANGO/install.sh" --no-island | sed -n '/Done. Next/q;p'
+    set --
+    [ -n "$machine" ] && set -- --machine "$machine"
+    sh "$MANGO/install.sh" --no-island "$@" | sed -n '/Done. Next/q;p'
 
     say "The island"
     set --
@@ -166,9 +192,13 @@ main() {
 
     echo
     say "Done."
-    note "Log out, then log in on tty1: mango starts there now (Hyprland is still installed as a fallback:"
-    note "  from tty2 run  dbus-run-session start-hyprland)."
-    note "Screens: edit ~/.config/mango/config/monitors.conf if they need it (wlr-randr lists them)."
+    if hyprland_here; then
+        note "Log out and pick mango at the login screen (Hyprland stays in its list,"
+        note "and tty1 still starts Hyprland as the fallback)."
+    else
+        note "Log out, then log in on tty1 or at the login screen: mango starts there now."
+    fi
+    note "Screens + workspace keys: ~/.config/mango/machines/$(basename "$(readlink "$MANGO/machine.conf")")"
     note "Once mango works, remove Hyprland from inside mango with:"
     note "  curl -fsSL https://raw.githubusercontent.com/EnvyMeAdams/mango-dotfiles/main/setup.sh | sh -s -- --cleanup"
 }
@@ -202,6 +232,11 @@ cleanup_hyprland() {
                               note "removed link ${l#"$HOME"/}" ;;
         esac
     done
+    # a ~/.bash_profile of your own that still starts Hyprland: tty1 starts mango now
+    if [ -f "$HOME/.bash_profile" ] && [ ! -L "$HOME/.bash_profile" ] && grep -qs "start-hyprland\|Hyprland" "$HOME/.bash_profile"; then
+        mv "$HOME/.bash_profile" "$HOME/.bash_profile.hyprland.old"
+        note "your ~/.bash_profile started Hyprland; kept it as ~/.bash_profile.hyprland.old"
+    fi
     # ~/.bash_profile / ~/.bashrc must still exist (mango starts from bash_profile)
     [ -e "$HOME/.bash_profile" ] || ln -s "$MANGO/shell/bash_profile" "$HOME/.bash_profile"
     [ -e "$HOME/.bashrc" ] || ln -s "$MANGO/shell/bashrc" "$HOME/.bashrc"
@@ -245,6 +280,11 @@ cleanup_hyprland() {
     else
         note "no Hyprland packages installed"
     fi
+    # 4. Quickshell no longer needs its Hyprland support
+    portage_add package.use "gui-apps/quickshell -hyprland"
+    root emerge $ask --oneshot --update --newuse gui-apps/quickshell ||
+        warn "Quickshell wasn't rebuilt; it still works, it just keeps the Hyprland bits until its next update."
+
     left=$(grep -rlsiE '/(hypr|aquamarine|xdg-desktop-portal-hyprland)' /etc/portage/package.* 2>/dev/null || true)
     [ -n "$left" ] && warn "Hyprland lines are still in: $(echo "$left" | tr '\n' ' ')(harmless; delete them if you like)"
 

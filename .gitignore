@@ -4,3 +4,7 @@
 
 # fastfetch logo pictures are personal, keep them out
 fastfetch/logos/
+
+# per machine: a link to machines/<name>.conf made by install.sh
+machine.conf
+local.conf

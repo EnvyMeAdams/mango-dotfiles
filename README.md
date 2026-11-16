@@ -1,7 +1,7 @@
 # mango-dotfiles
 
-My [mango](https://mangowm.github.io) config, on Gentoo with OpenRC (the
-ThinkPad). A port of [hyprland-dotfiles](https://github.com/EnvyMeAdams/hyprland-dotfiles):
+My [mango](https://mangowm.github.io) config, on Gentoo with OpenRC: the
+ThinkPad runs it, and the desktop is moving over from Hyprland. A port of [hyprland-dotfiles](https://github.com/EnvyMeAdams/hyprland-dotfiles):
 same keybinds, same split-by-topic layout, same dwindle tiling. The shell on
 top is the Quickshell dynamic island from
 [quickshell-dotfiles](https://github.com/EnvyMeAdams/quickshell-dotfiles).
@@ -10,7 +10,9 @@ top is the Quickshell dynamic island from
 setup.sh                  one-line installer: packages, binaries, dotfiles, island, cleanup
 install.sh                links the dotfiles only (setup.sh runs it)
 config.conf               entry point, sources config/ in order
-config/                   one file per topic (monitors, keybinds, autostart…)
+config/                   one file per topic (keybinds, autostart, appearance…)
+machines/                 screens + workspace keys per machine: t440p, desktop, generic
+machine.conf              link to this machine's file in machines/ (made by install.sh)
 local.conf                this machine only, never committed (made by install.sh)
 portals/                  which portal does what + the screen-share picker
 scripts/
@@ -42,11 +44,44 @@ Options go after `sh -s --`, for example `| sh -s -- --greeter --enable`:
 | `--greeter` | also install the island login screen, running in mango |
 | `--enable` | with `--greeter`: start the login screen at boot |
 | `--binaries` | also reinstall what's already installed from binaries where one matches (Firefox left alone) |
+| `--machine NAME` | screens + workspace keys from `machines/NAME.conf` (picked from the hardware when left out) |
+| `--no-binhost` | don't turn on binary packages; everything compiles |
 | `--cleanup` | remove Hyprland: its packages, your Hyprland dotfiles, the login screen's Hyprland mode |
 | `--yes` | don't stop at each emerge to ask |
 
-Then log out and log in on tty1: mango starts there. Hyprland stays installed
-until you clean it up, so from tty2 `dbus-run-session start-hyprland` still works.
+Then log out and pick mango at the login screen (or log in on tty1 on a
+machine without Hyprland). Hyprland stays installed until you clean it up.
+
+## Machines
+
+Screens and the Super+number keys differ per machine, so they live in
+`machines/`, and `machine.conf` links to the one for this machine.
+`install.sh` picks it from the hardware the first time (a ThinkPad gets
+`t440p`, the ASRock B850M board gets `desktop`, anything else `generic`) and
+keeps it after that. Change it with `install.sh --machine desktop`.
+
+| Machine | Screens | Super+1 … 0 |
+|---|---|---|
+| `t440p` | laptop panel, any external one to its right | tags 1-10 of the screen you're on |
+| `desktop` | Samsung (DP-2, 180 Hz) + Philips (HDMI-A-1, 100 Hz, vertical) on its right | 1-5 on the Samsung, 6-0 on the Philips, like Hyprland |
+| `generic` | every screen at its native mode | tags 1-10 of the screen you're on |
+
+On the desktop, mango still gives each screen its own tags, so Super+6 shows
+the Philips' tag 1 (the island shows "1" there).
+
+## The desktop: next to Hyprland first
+
+Run the same one line on the desktop. Until `--cleanup`, it leaves Hyprland
+alone, so you can switch back any time:
+
+- Quickshell keeps its Hyprland support (the island works in both)
+- `~/.bash_profile` keeps starting Hyprland on tty1, as the fallback
+- the login screen lists both mango and Hyprland; pick one before signing in
+- kitty, fastfetch and bash use the same files as hyprland-dotfiles
+
+To compile everything instead of using binaries: `| sh -s -- --no-binhost`.
+When mango has done everything for a while, `--cleanup` from inside mango
+removes Hyprland (below).
 
 ## Removing Hyprland
 
@@ -63,7 +98,9 @@ curl -fsSL https://raw.githubusercontent.com/EnvyMeAdams/mango-dotfiles/main/set
   xdg-desktop-portal-hyprland, hyprlang, aquamarine…), then `emerge --depclean`
   shows everything it will remove, including what only Hyprland needed. Read it before saying yes.
 
-The `hyprland-dotfiles` repo on GitHub isn't touched; the desktop still uses it.
+It also rebuilds Quickshell without its Hyprland support, and points tty1 at mango.
+
+The `hyprland-dotfiles` repo on GitHub isn't touched, so it's always there to go back to.
 
 ## What maps to what
 
